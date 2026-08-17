@@ -74,6 +74,23 @@ Check real usage in the [Anthropic Console](https://console.anthropic.com/settin
 
 ---
 
+## Deploying: the commit-email trap
+
+Vercel refuses to deploy a commit whose author email it cannot match to a GitHub account. It reports this as **"Deployment Blocked"** in the dashboard, but from the CLI the deployment just sits at *"building"* forever with no logs and no error — easy to mistake for a Vercel outage. This cost an afternoon once.
+
+This repo guards against it two ways:
+
+- `git config user.email` is set to `255017126+shash825@users.noreply.github.com` (GitHub's no-reply address for the account, which always matches and doesn't expose a personal address).
+- `.githooks/pre-commit` refuses to create a commit if that email ever changes.
+
+The hook is versioned but Git needs to be told where to find it. **After a fresh clone, run:**
+
+```bash
+git config core.hooksPath .githooks
+```
+
+If a deployment ever hangs on "building" again, check the Vercel dashboard's deployment page first — the CLI will not tell you it was blocked.
+
 ## Notes and gotchas
 
 **Runs take a while.** A full research pass is typically 1–3 minutes. The API route sets `maxDuration = 300` (5 minutes). Vercel caps function duration by plan — if you get a function timeout instead of picks, either upgrade the plan or lower `MAX_SEARCHES`.

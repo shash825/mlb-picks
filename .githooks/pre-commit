@@ -1,0 +1,17 @@
+#!/bin/sh
+# Vercel blocks any deployment whose commit email cannot be matched to a GitHub
+# account, and it surfaces that as a deployment stuck on "building" rather than
+# an obvious error. This hook stops a mismatched commit from being created at
+# all, which is the only cheap place to catch it.
+EXPECTED="255017126+shash825@users.noreply.github.com"
+ACTUAL="$(git config user.email)"
+
+if [ "$ACTUAL" != "$EXPECTED" ]; then
+  echo "pre-commit: refusing to commit with an email GitHub cannot match." >&2
+  echo "  configured: ${ACTUAL:-<unset>}" >&2
+  echo "  expected:   $EXPECTED" >&2
+  echo "" >&2
+  echo "Fix with:" >&2
+  echo "  git config user.email \"$EXPECTED\"" >&2
+  exit 1
+fi
