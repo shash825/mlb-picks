@@ -17,14 +17,29 @@ const MODEL = "claude-sonnet-5";
  * Raise it only if runs are finishing fast — a run that times out costs you the
  * search fees and returns nothing.
  */
-const MAX_SEARCHES = 5;
+const MAX_SEARCHES = 4;
+
+/**
+ * Search tool variant. The newer "web_search_20260209" adds dynamic filtering,
+ * which runs a server-side code-execution pass on every search. Measured cost
+ * was roughly 60s per search — five of them consumed the entire 300s function
+ * budget and returned nothing. The basic variant skips that pass and is the
+ * reason a run now fits. Do not "upgrade" this without timing a real run.
+ */
+const SEARCH_TOOL = "web_search_20250305" as const;
 
 /**
  * Thinking depth. "medium" is the cost/latency/quality balance point on Sonnet 5
  * and is roughly comparable to the previous generation at "high". Combined with
  * the search budget above, this is what keeps a run inside the 300s limit.
  */
-const EFFORT = "medium" as const;
+const EFFORT = "low" as const;
+
+/**
+ * Give up before Vercel's 300s hard kill so the user gets our explanatory error
+ * (and the timing log below) instead of an opaque 504 with no diagnostics.
+ */
+const DEADLINE_MS = 240_000;
 
 /** Server-tool turns can pause; resume a bounded number of times. */
 const MAX_CONTINUATIONS = 2;
@@ -50,6 +65,8 @@ export async function generatePicks(
 
   let response: Anthropic.Message;
   let searchCount = 0;
+  const startedAt = Date.now();
+  const elapsed = () => Math.round((Date.now() - startedAt) / 1000);
 
   try {
     for (let attempt = 0; ; attempt++) {
@@ -62,16 +79,23 @@ export async function generatePicks(
         output_config: { effort: EFFORT },
         tools: [
           {
-            type: "web_search_20260209",
+            type: SEARCH_TOOL,
             name: "web_search",
             max_uses: MAX_SEARCHES,
           },
         ],
         messages,
-      });
+      }, { signal: AbortSignal.timeout(DEADLINE_MS - (Date.now() - startedAt)) });
 
       response = await stream.finalMessage();
       searchCount += response.usage.server_tool_use?.web_search_requests ?? 0;
+
+      // Timing lands in Vercel's runtime logs. If a run ever overruns again,
+      // this says exactly how long it took and how many searches it burned,
+      // instead of leaving us to guess.
+      console.log(
+        `[picks] attempt ${attempt} finished at ${elapsed()}s | searches=${searchCount} | stop=${response.stop_reason}`,
+      );
 
       // The server-side search loop hit its iteration cap. Append the partial
       // assistant turn and re-send; the API picks up where it left off.
@@ -82,6 +106,13 @@ export async function generatePicks(
       break;
     }
   } catch (err) {
+    console.error(`[picks] failed at ${elapsed()}s | searches=${searchCount}`, err);
+    if (err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError")) {
+      throw new PicksError(
+        `The research run was still going at ${elapsed()}s and was stopped before the server's hard limit. Lower MAX_SEARCHES in src/lib/claude.ts.`,
+        "upstream_error",
+      );
+    }
     throw toPicksError(err);
   }
 
