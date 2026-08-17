@@ -9,13 +9,25 @@ const MODEL = "claude-sonnet-5";
 /**
  * Web search budget per run. NOTE: each search Claude performs is billed on your
  * Anthropic account IN ADDITION to normal token costs ($10 per 1,000 searches at
- * the time of writing, so roughly $0.10 per full run here). It is still "just
- * the Anthropic key", but it is not free — lower this number to spend less.
+ * the time of writing). It is still "just the Anthropic key", but it is not free.
+ *
+ * This is ALSO the main lever on wall-clock time. Vercel kills the function at
+ * 300s (see maxDuration in the picks route), and 10 searches at "high" effort
+ * blew through that limit. Five keeps a full run comfortably inside the window.
+ * Raise it only if runs are finishing fast — a run that times out costs you the
+ * search fees and returns nothing.
  */
-const MAX_SEARCHES = 10;
+const MAX_SEARCHES = 5;
+
+/**
+ * Thinking depth. "medium" is the cost/latency/quality balance point on Sonnet 5
+ * and is roughly comparable to the previous generation at "high". Combined with
+ * the search budget above, this is what keeps a run inside the 300s limit.
+ */
+const EFFORT = "medium" as const;
 
 /** Server-tool turns can pause; resume a bounded number of times. */
-const MAX_CONTINUATIONS = 4;
+const MAX_CONTINUATIONS = 2;
 
 export class PicksError extends Error {
   constructor(
@@ -47,7 +59,7 @@ export async function generatePicks(
         model: MODEL,
         max_tokens: 16000,
         system: buildSystemPrompt(sport),
-        output_config: { effort: "high" },
+        output_config: { effort: EFFORT },
         tools: [
           {
             type: "web_search_20260209",

@@ -56,6 +56,16 @@ export default function Home() {
       });
 
       if (!res.ok) {
+        // A gateway timeout returns Vercel's HTML error page, not our JSON, so
+        // there's no body to read — say what actually happened instead of
+        // surfacing a bare status code.
+        if (res.status === 504 || res.status === 502) {
+          setError(
+            "The research run hit the 5-minute server limit before finishing. The searches it already ran still cost money, so don't just hammer retry - if this keeps happening, lower MAX_SEARCHES in src/lib/claude.ts.",
+          );
+          return;
+        }
+
         const body = (await res.json().catch(() => null)) as ApiError | null;
         if (body?.code === "unauthorized") {
           setUnlocked(false);

@@ -27,7 +27,12 @@ export function buildSystemPrompt(sport: SportConfig): string {
 
 You have a web search tool. Your training data is stale and cannot tell you today's schedule, lineups, injuries, weather, or prices. Research before you write. Do not state a fact about today from memory — if you did not read it in a search result, either search for it or leave it out.
 
-Research checklist for ${sport.label}:
+Budget your searches. You have a small, hard search limit and a wall-clock deadline, so spend searches deliberately rather than exhaustively:
+- Make each search count. Prefer one broad query that returns a roundup (a full slate preview, an odds page covering every game, a lineups page) over several narrow queries about individual teams.
+- Do not try to research every game. Confirm the slate, scan the market, then go deep on only the two or three games where you already suspect an edge.
+- Stop researching and write the card while you still have budget left. An incomplete card delivered is worth more than a thorough one you never finish. If you could not verify something, lower the confidence or drop that pick rather than spending another search.
+
+Research priorities for ${sport.label}, highest first:
 ${sport.researchNotes}
 
 Selection rules:
