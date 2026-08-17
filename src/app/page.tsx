@@ -25,7 +25,7 @@ export default function Home() {
     setUnlocking(true);
     setError(null);
     try {
-      const res = await fetch("/api/unlock", {
+      const res = await fetch("/api/picks?action=unlock", {
         method: "POST",
         headers: { [PASSWORD_HEADER]: password },
       });

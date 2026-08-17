@@ -9,16 +9,36 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * A full research run (up to 10 web searches plus reasoning) can take a few
- * minutes. Vercel caps this by plan — see the README if you get a function
- * timeout instead of picks.
+ * A research run can take a couple of minutes. Vercel hard-kills the function
+ * at this limit and returns a 504, so MAX_SEARCHES and EFFORT in lib/claude.ts
+ * are tuned to finish well inside it. Raising this above your plan's cap does
+ * nothing.
  */
 export const maxDuration = 300;
 
+/**
+ * Both actions live in one route, so the app ships one serverless function
+ * instead of two identical ones:
+ *
+ *   POST /api/picks?action=unlock  -> validate the password only (free)
+ *   POST /api/picks                -> generate today's card (costs an API call)
+ *
+ * Note: this does NOT make `vercel build` work on Windows without Developer
+ * Mode. Next still emits deduped internal error pages that Vercel symlinks, and
+ * symlink creation is what fails there. Build on Vercel, or enable Developer
+ * Mode if you want local prebuilt deploys.
+ */
 export async function POST(request: Request) {
   const auth = checkPassword(request);
   if (!auth.ok) {
     return fail(auth.message, auth.code, auth.code === "unauthorized" ? 401 : 500);
+  }
+
+  const params = new URL(request.url).searchParams;
+
+  // Password-check only. Lets the UI gate open without spending anything.
+  if (params.get("action") === "unlock") {
+    return Response.json({ ok: true });
   }
 
   if (!process.env.ANTHROPIC_API_KEY) {
@@ -29,7 +49,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const sportId = new URL(request.url).searchParams.get("sport") ?? DEFAULT_SPORT;
+  const sportId = params.get("sport") ?? DEFAULT_SPORT;
   const sport = getSport(sportId);
   if (!sport) {
     return fail(`Unknown sport "${sportId}".`, "unknown", 400);
